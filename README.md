@@ -1,6 +1,6 @@
 # Micrograd
 
-**TODO: Add description**
+**An Elixir implementation of Andrej Karpathy's micrograd**
 
 ## Installation
 
@@ -19,3 +19,7 @@ Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_do
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/micrograd>.
 
+
+## Additional Links
+- [micrograd](https://github.com/karpathy/micrograd)
+- [The spelled-out intro to neural networks and backpropagation: building micrograd](https://youtu.be/VMj-3S1tku0?si=3hb5-lpHeQAKAnuc)
