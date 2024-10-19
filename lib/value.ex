@@ -7,7 +7,7 @@ defmodule Value do
           %__MODULE__{
             backward: fun(any()),
             children: list(%__MODULE__{}),
-            data: Integer.t(),
+            data: Integer.t() | float(),
             gradient: non_neg_integer(),
             operation: operation()
           }
