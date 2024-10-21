@@ -26,7 +26,7 @@ defmodule NeuronTest do
   end
 
   describe "call/1" do
-    test "returns the tanh of the neuron's children data values" do
+    test "returns the tanh Value struct with the input Neuron as children values" do
       %{data: activation} = Neuron.build(2) |> Neuron.call([1, 1])
       assert_in_delta activation, -1.0, 2
     end
