@@ -108,20 +108,23 @@ defmodule Value do
   end
 
   @spec tanh(__MODULE__.t()) :: __MODULE__.t()
-  def tanh(%Value{data: data, children: [left, right]}, gradient \\ 1) do
+  def tanh(%Value{data: data, children: children}, gradient \\ 1) do
     t = (:math.exp(2 * data) - 1) / (:math.exp(2 * data) + 1)
 
     result = %Value{
       data: t,
       gradient: gradient,
-      children: [left, right],
+      children: children,
       operation: :tanh
     }
 
     backward = fn node ->
-      left = %Value{left | gradient: 1 - t ** 2}
-      right = %Value{right | gradient: 1 - t ** 2}
-      %Value{node | children: [left, right]}
+      children =
+        Enum.map(children, fn child ->
+          %Value{child | gradient: 1 - t ** 2}
+        end)
+
+      %Value{node | children: children}
     end
 
     %Value{result | backward: backward}

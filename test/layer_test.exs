@@ -27,7 +27,7 @@ defmodule LayerTest do
   end
 
   describe "call/2" do
-    test "returns the activation value of the layer" do
+    test "returns the activation values of each layer" do
       layer = Layer.build(%{input_size: 2, output_size: 3})
       result = Layer.call(layer, [1, 1])
       assert 3 = length(result)
