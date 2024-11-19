@@ -22,6 +22,8 @@ defmodule NeuronTest do
 
       assert [%Value{data: ^weight_1}, %Value{data: ^weight_2}, %Value{data: ^bias}] =
                Neuron.parameters(neuron)
+
+      assert 5 = 4 |> Neuron.build() |> Neuron.parameters() |> length()
     end
   end
 

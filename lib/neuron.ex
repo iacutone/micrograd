@@ -1,4 +1,6 @@
 defmodule Neuron do
+  @enforce_keys [:bias, :weights]
+
   defstruct [:bias, weights: []]
 
   @type t :: %__MODULE__{
@@ -6,11 +8,11 @@ defmodule Neuron do
           weights: list(Neuron.t())
         }
 
-  @spec build(non_neg_integer()) :: __MODULE__.t()
+  @spec build(pos_integer()) :: __MODULE__.t()
   def build(size \\ 1) do
     %__MODULE__{
       weights:
-        Enum.reduce(0..(size - 1), [], fn _i, acc ->
+        Enum.reduce(1..size, [], fn _i, acc ->
           [Value.build(random_float()) | acc]
         end),
       bias: Value.build(random_float())
@@ -23,17 +25,17 @@ defmodule Neuron do
   end
 
   @spec call(__MODULE__.t(), list()) :: Value.t()
-  def call(%Neuron{weights: children, bias: %Value{data: bias}}, input) do
-    # multi the weights and input then sum the output and the bias
+  def call(%Neuron{weights: weights, bias: %Value{data: bias}}, input) do
+    # w * x + b
     data =
-      Enum.zip(input, children)
+      Enum.zip(input, weights)
       |> Enum.map(fn {input, %{data: data}} ->
         input * data
       end)
       |> Enum.sum()
       |> then(fn result -> result + bias end)
 
-    Value.tanh(%Value{data: data, children: children})
+    Value.tanh(%Value{data: data, children: weights})
   end
 
   @spec random_float :: float()

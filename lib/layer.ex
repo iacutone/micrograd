@@ -9,7 +9,7 @@ defmodule Layer do
 
   @spec build(map()) :: list(Layer.t())
   def build(%{input_size: input_size, output_size: output_size}) do
-    Enum.reduce(0..(output_size - 1), [], fn _i, acc ->
+    Enum.reduce(1..output_size, [], fn _i, acc ->
       [Neuron.build(input_size) | acc]
     end)
     |> Enum.reverse()
@@ -26,7 +26,7 @@ defmodule Layer do
   end
 
   @spec call(__MODULE__.t(), list()) :: list(Value.t()) | Value.t()
-  def(call(%Layer{neurons: neurons}, input)) do
+  def call(%Layer{neurons: neurons}, input) do
     out =
       Enum.map(neurons, fn neuron ->
         Neuron.call(neuron, input)

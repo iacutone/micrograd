@@ -23,6 +23,9 @@ defmodule LayerTest do
         |> List.flatten()
 
       assert ^neurons = Layer.parameters(layer)
+
+      assert 16 =
+               %{input_size: 3, output_size: 4} |> Layer.build() |> Layer.parameters() |> length()
     end
   end
 
