@@ -24,6 +24,12 @@ defmodule MLPTest do
         |> List.flatten()
 
       assert ^layers = MLP.parameters(mlp)
+
+      assert 41 =
+               %{input_size: 3, layer_sizes: [4, 4, 1]}
+               |> MLP.build()
+               |> MLP.parameters()
+               |> length()
     end
   end
 

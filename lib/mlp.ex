@@ -5,11 +5,13 @@ defmodule MLP do
 
   @type t :: %__MODULE__{layers: list(Layer.t())}
 
-  @spec build(%{input_size: non_neg_integer(), layer_sizes: list()}) :: list(Layer.t())
+  @spec build(%{input_size: pos_integer(), layer_sizes: list()}) :: list(Layer.t())
   def build(%{input_size: input_size, layer_sizes: layer_sizes}) do
     layers =
-      Enum.reduce(layer_sizes, [], fn layer_size, acc ->
-        [Layer.build(%{input_size: input_size, output_size: layer_size}) | acc]
+      [input_size | layer_sizes]
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.reduce([], fn [i_size, output_size], acc ->
+        [Layer.build(%{input_size: i_size, output_size: output_size}) | acc]
       end)
       |> Enum.reverse()
 
