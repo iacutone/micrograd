@@ -30,10 +30,10 @@ defmodule ValueTest do
       a = Value.build(1)
       b = Value.build(1)
       result = Value.add(a, b)
-      result = Map.put(result, :gradient, 1)
+      result = Map.put(result, :gradient, 1.0)
       result = result.backward.(result)
 
-      assert %{children: [%{gradient: 1}, %{gradient: 1}]} = result
+      assert %{children: [%{gradient: 1.0}, %{gradient: 1.0}]} = result
     end
   end
 
@@ -65,11 +65,11 @@ defmodule ValueTest do
     test "when backward is called sets the :children's gradient value" do
       a = Value.build(1)
       b = Value.build(1)
-      result = Value.add(a, b)
-      result = Map.put(result, :gradient, 1)
+      result = Value.sub(a, b)
+      result = Map.put(result, :gradient, 1.0)
       result = result.backward.(result)
 
-      assert %{children: [%{gradient: 1}, %{gradient: 1}]} = result
+      assert %{children: [%{gradient: 1.0}, %{gradient: 1.0}]} = result
     end
   end
 
@@ -105,7 +105,7 @@ defmodule ValueTest do
       result = Map.put(result, :gradient, 2)
       result = result.backward.(result)
 
-      assert %{children: [%{gradient: 4}, %{gradient: 2}]} = result
+      assert %{children: [%{gradient: 4.0}, %{gradient: 2.0}]} = result
     end
   end
 
@@ -141,11 +141,11 @@ defmodule ValueTest do
       result = Map.put(result, :gradient, 2)
       result = result.backward.(result)
 
-      assert %{children: [%{gradient: 4}, %{gradient: 2}]} = result
+      assert %{children: [%{gradient: 4.0}, %{gradient: 2.0}]} = result
     end
   end
 
-  describe "tanh/1" do
+  describe "tanh/2" do
     test "returns tanh of the prior node's data value" do
       a = Value.build(1)
       b = Value.build(1)
@@ -169,6 +169,86 @@ defmodule ValueTest do
 
       assert %{children: [%{gradient: 0.07065082485316443}, %{gradient: 0.07065082485316443}]} =
                result
+    end
+  end
+
+  describe "pow/2" do
+    setup do
+      a = %Value{data: 2, gradient: 12.0}
+      result = Value.pow(a, 2)
+
+      %{a: a, result: result}
+    end
+
+    test "sets data correctly", %{result: result} do
+      assert %{data: 4} = result
+    end
+
+    test "sets operation correctly", %{result: result} do
+      assert %{operation: :pow} = result
+    end
+
+    test "sets the children to the pow/2 value", %{a: a, result: result} do
+      assert %{children: [^a]} = result
+    end
+
+    test "sets gradient value correctly", %{result: result} do
+      assert %{gradient: 12.0} = result
+      result = result.backward.(result)
+      assert %{data: 4, gradient: 12.0, children: [%{data: 2, gradient: 48.0}]} = result
+    end
+  end
+
+  describe "backward/1" do
+    test "sets the gradient to 1.0 for the root node" do
+      a = Value.build(1.0)
+      assert %{gradient: 1.0} = Value.build(1.0) |> Value.add(a) |> Value.backward()
+    end
+
+    test "gradients accumulate correctly" do
+      # TODO: get the gradients to pass to children correctly when the Value struct is duplicated
+      # a = Value.build(1.0)
+      # b = Value.add(a, a)
+
+      # assert %{data: 2.0, gradient: 1.0, children: [%{gradient: 2.0}, %{gradient: 2.0}]} =
+      #          Value.backward(b)
+
+      a = Value.build(2.0)
+      b = Value.build(-3.0)
+      c = Value.build(10.0)
+
+      assert %Value{
+               children: [
+                 %Value{
+                   children: [
+                     %Value{
+                       backward: nil,
+                       children: [],
+                       data: 2.0,
+                       gradient: -3.0,
+                       operation: nil
+                     },
+                     %Value{backward: nil, children: [], data: -3.0, gradient: 2.0}
+                   ],
+                   data: -6.0,
+                   gradient: 1.0,
+                   operation: :*
+                 },
+                 %Value{backward: nil, children: [], data: 10.0, gradient: 1.0, operation: nil}
+               ],
+               data: 4.0,
+               gradient: 1.0,
+               operation: :+
+             } = Value.mult(a, b) |> Value.add(c) |> Value.backward()
+    end
+  end
+
+  describe "sum/1" do
+    test "sums the value nodes correctly" do
+      a = Value.build(2)
+      b = Value.build(2)
+
+      assert %{data: 4, children: [^a, ^b]} = Value.sum([a, b])
     end
   end
 end
