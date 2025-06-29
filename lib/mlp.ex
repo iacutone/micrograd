@@ -33,4 +33,13 @@ defmodule MLP do
       Layer.call(layer, inputs)
     end)
   end
+
+  def update(%{layers: layers} = mlp, loss, learning_rate) do
+    layers =
+      Enum.map(layers, fn layer ->
+        Layer.update(layer, loss, learning_rate)
+      end)
+
+    %{mlp | layers: layers}
+  end
 end

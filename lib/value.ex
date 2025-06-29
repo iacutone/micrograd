@@ -1,7 +1,14 @@
 defmodule Value do
-  @enforce_keys [:data]
+  @enforce_keys [:data, :ref]
 
-  defstruct [:backward, :data, :operation, children: [], gradient: 0.0]
+  defstruct [
+    :backward,
+    :data,
+    :operation,
+    :ref,
+    children: [],
+    gradient: 0.0
+  ]
 
   @type t ::
           %__MODULE__{
@@ -16,7 +23,7 @@ defmodule Value do
 
   @spec build(integer()) :: __MODULE__.t()
   def build(data) do
-    %Value{data: data}
+    %Value{data: data, ref: make_ref()}
   end
 
   @spec add(__MODULE__.t(), __MODULE__.t()) :: __MODULE__.t()
@@ -27,7 +34,8 @@ defmodule Value do
     result = %Value{
       children: [left, right],
       data: left_data + right_data,
-      operation: :+
+      operation: :+,
+      ref: make_ref()
     }
 
     backward = fn node ->
@@ -52,7 +60,8 @@ defmodule Value do
     result = %Value{
       children: [left, right],
       data: left_data - right_data,
-      operation: :-
+      operation: :-,
+      ref: make_ref()
     }
 
     backward = fn node ->
@@ -77,7 +86,8 @@ defmodule Value do
     result = %Value{
       children: [left, right],
       data: left_data * right_data,
-      operation: :*
+      operation: :*,
+      ref: make_ref()
     }
 
     backward = fn node ->
@@ -102,7 +112,8 @@ defmodule Value do
     result = %Value{
       children: [left, right],
       data: trunc(left_data / right_data),
-      operation: :/
+      operation: :/,
+      ref: make_ref()
     }
 
     backward = fn node ->
@@ -127,7 +138,8 @@ defmodule Value do
       data: t,
       gradient: gradient,
       children: children,
-      operation: :tanh
+      operation: :tanh,
+      ref: make_ref()
     }
 
     backward = fn node ->
@@ -149,7 +161,8 @@ defmodule Value do
       data: t,
       gradient: gradient,
       children: [child],
-      operation: :pow
+      operation: :pow,
+      ref: make_ref()
     }
 
     backward = fn node ->
@@ -161,24 +174,50 @@ defmodule Value do
     %Value{result | backward: backward}
   end
 
-  def backward(root) do
+  def backward(%{children: [_left, _right]} = root) do
     root = Map.put(root, :gradient, 1.0)
     %{children: [left, right], gradient: gradient} = root = root.backward.(root)
 
     %{root | children: [backward(left, gradient), backward(right, gradient)]}
   end
 
+  # def backward(%{children: [_node]} = root) do
+  #   root = Map.put(root, :gradient, 1.0)
+  #   IO.puts("<<<<<< 1")
+  #   %{children: [node], gradient: gradient} = root = root.backward.(root)
+
+  #   %{root | children: [backward(node, gradient)]}
+  # end
+
   def backward(%{backward: nil, gradient: node_gradient} = node, _gradient) do
     %{node | gradient: node_gradient}
   end
 
-  def backward(root, gradient) do
+  def backward(%{children: [_left, _right]} = root, gradient) do
     %{children: [left, right]} = root = root.backward.(root)
 
     %{root | children: [backward(left, gradient), backward(right, gradient)]}
   end
 
+  def backward(%{children: [_node]} = root, gradient) do
+    %{children: [node]} = root = root.backward.(root)
+
+    %{root | children: [backward(node, gradient)]}
+  end
+
   def sum([head | tail]) do
     Enum.reduce(tail, head, fn value, acc -> add(acc, value) end)
+  end
+
+  def map_gradients(%{children: children} = loss) do
+    do_flatten(children, %{loss.ref => loss.gradient})
+  end
+
+  def do_flatten([] = _loss, acc), do: acc
+
+  def do_flatten(loss, acc) do
+    Enum.reduce(loss, acc, fn %{ref: ref, gradient: gradient, children: nodes}, acc ->
+      do_flatten(nodes, Map.put(acc, ref, gradient))
+    end)
   end
 end

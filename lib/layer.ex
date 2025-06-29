@@ -38,4 +38,16 @@ defmodule Layer do
       out
     end
   end
+
+  def update(%{neurons: neurons} = layer, loss, learning_rate) do
+    IO.inspect(neurons, label: "<<< neurons")
+    IO.inspect(loss, label: "<<< loss")
+
+    neurons =
+      Enum.map(neurons, fn neuron ->
+        Neuron.update(neuron, loss, learning_rate)
+      end)
+
+    %{layer | neurons: neurons}
+  end
 end

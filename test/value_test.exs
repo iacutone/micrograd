@@ -174,7 +174,7 @@ defmodule ValueTest do
 
   describe "pow/2" do
     setup do
-      a = %Value{data: 2, gradient: 12.0}
+      a = %Value{data: 2, gradient: 12.0, ref: make_ref()}
       result = Value.pow(a, 2)
 
       %{a: a, result: result}
@@ -206,12 +206,11 @@ defmodule ValueTest do
     end
 
     test "gradients accumulate correctly" do
-      # TODO: get the gradients to pass to children correctly when the Value struct is duplicated
-      # a = Value.build(1.0)
-      # b = Value.add(a, a)
+      a = Value.build(1.0)
+      b = Value.add(a, a)
 
-      # assert %{data: 2.0, gradient: 1.0, children: [%{gradient: 2.0}, %{gradient: 2.0}]} =
-      #          Value.backward(b)
+      assert %{data: 2.0, gradient: 1.0, children: [%{gradient: 2.0}, %{gradient: 2.0}]} =
+               Value.backward(b)
 
       a = Value.build(2.0)
       b = Value.build(-3.0)
