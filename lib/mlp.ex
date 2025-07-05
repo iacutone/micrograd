@@ -27,11 +27,24 @@ defmodule MLP do
     |> List.flatten()
   end
 
-  @spec call(__MODULE__.t(), list()) :: list(Value.t())
+  @spec call(__MODULE__.t(), list()) :: Value.t()
   def call(%__MODULE__{layers: layers}, inputs) do
-    Enum.map(layers, fn layer ->
-      Layer.call(layer, inputs)
+    # Convert initial inputs to Value structs if they aren't already
+    current_values = Enum.map(inputs, fn
+      %Value{} = v -> v
+      data -> Value.build(data)
     end)
+
+    Enum.reduce(layers, current_values, fn layer, current_inputs ->
+      output = Layer.call(layer, current_inputs)
+      # Convert single Value to list for next layer, or keep as list
+      if is_struct(output, Value) do
+        [output]
+      else
+        output
+      end
+    end)
+    |> List.first()  # Return the single output Value for the final layer
   end
 
   def update(%{layers: layers} = mlp, loss, learning_rate) do

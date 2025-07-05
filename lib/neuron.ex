@@ -25,33 +25,40 @@ defmodule Neuron do
   end
 
   @spec call(__MODULE__.t(), list()) :: Value.t()
-  def call(%Neuron{weights: weights, bias: %Value{data: bias}} = neuron, input) do
+  def call(%Neuron{weights: weights, bias: bias}, input) do
     # w * x + b
-    data =
-      Enum.zip(input, weights)
-      |> Enum.map(fn {input, %{data: data}} ->
-        input * data
-      end)
-      |> Enum.sum()
-      |> then(fn result -> result + bias end)
+    # Handle both raw values and Value structs in input
+    input_values = Enum.map(input, fn
+      %Value{} = v -> v
+      data -> Value.build(data)
+    end)
 
-    Value.tanh(%Value{data: data, children: [neuron], ref: make_ref()})
+    # Compute weighted sum
+    weighted_sum =
+      Enum.zip(input_values, weights)
+      |> Enum.map(fn {input_val, weight} ->
+        Value.mult(input_val, weight)
+      end)
+      |> Value.sum()
+
+    # Add bias
+    linear_output = Value.add(weighted_sum, bias)
+
+    # Apply tanh activation
+    Value.tanh(linear_output)
   end
 
   def update(%__MODULE__{weights: weights, bias: bias} = neuron, loss, learning_rate) do
-    %{data: bias_data, gradient: bias_gradient} = bias
-    # IO.inspect(loss, label: "<<<< WTF")
+    %{data: bias_data} = bias
 
     weights =
       Enum.map(weights, fn %Value{data: data} = weight ->
-        gradient = Map.get(loss, weight.ref)
-        # IO.inspect(weight, label: "<<<<<")
-        # IO.inspect(gradient)
-        Map.put(weight, :data, data + -learning_rate * gradient)
+        gradient = Map.get(loss, weight.ref, 0.0)  # Default to 0 if gradient not found
+        Map.put(weight, :data, data - learning_rate * gradient)  # Proper gradient descent
       end)
 
-    bias_gradient = Map.get(loss, bias.ref)
-    bias = Map.put(bias, :data, bias_data + -learning_rate * bias_gradient)
+    bias_gradient = Map.get(loss, bias.ref, 0.0)  # Default to 0 if gradient not found
+    bias = Map.put(bias, :data, bias_data - learning_rate * bias_gradient)  # Proper gradient descent
 
     %{neuron | weights: weights, bias: bias}
   end

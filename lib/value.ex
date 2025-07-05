@@ -28,24 +28,16 @@ defmodule Value do
 
   @spec add(__MODULE__.t(), __MODULE__.t()) :: __MODULE__.t()
   def add(
-        %Value{data: left_data, gradient: left_gradient} = left,
-        %Value{data: right_data, gradient: right_gradient} = right
+        %Value{data: left_data} = left,
+        %Value{data: right_data} = right
       ) do
-    result = %Value{
+    %Value{
       children: [left, right],
       data: left_data + right_data,
       operation: :+,
-      ref: make_ref()
+      ref: make_ref(),
+      gradient: 0.0
     }
-
-    backward = fn node ->
-      left = %Value{left | gradient: left_gradient + node.gradient}
-      right = %Value{right | gradient: right_gradient + node.gradient}
-
-      %Value{node | children: [left, right]}
-    end
-
-    %Value{result | backward: backward}
   end
 
   def add(_, _) do
@@ -54,24 +46,16 @@ defmodule Value do
 
   @spec sub(__MODULE__.t(), __MODULE__.t()) :: __MODULE__.t()
   def sub(
-        %Value{data: left_data, gradient: left_gradient} = left,
-        %Value{data: right_data, gradient: right_gradient} = right
+        %Value{data: left_data} = left,
+        %Value{data: right_data} = right
       ) do
-    result = %Value{
+    %Value{
       children: [left, right],
       data: left_data - right_data,
       operation: :-,
-      ref: make_ref()
+      ref: make_ref(),
+      gradient: 0.0
     }
-
-    backward = fn node ->
-      left = %Value{left | gradient: left_gradient + node.gradient}
-      right = %Value{right | gradient: right_gradient + node.gradient}
-
-      %Value{node | children: [left, right]}
-    end
-
-    %Value{result | backward: backward}
   end
 
   def sub(_, _) do
@@ -80,24 +64,16 @@ defmodule Value do
 
   @spec mult(__MODULE__.t(), __MODULE__.t()) :: __MODULE__.t()
   def mult(
-        %Value{data: left_data, gradient: left_gradient} = left,
-        %Value{data: right_data, gradient: right_gradient} = right
+        %Value{data: left_data} = left,
+        %Value{data: right_data} = right
       ) do
-    result = %Value{
+    %Value{
       children: [left, right],
       data: left_data * right_data,
       operation: :*,
-      ref: make_ref()
+      ref: make_ref(),
+      gradient: 0.0
     }
-
-    backward = fn node ->
-      left = %Value{left | gradient: left_gradient + right_data * node.gradient}
-      right = %Value{right | gradient: right_gradient + left_data * node.gradient}
-
-      %Value{node | children: [left, right]}
-    end
-
-    %Value{result | backward: backward}
   end
 
   def mult(_, _) do
@@ -106,24 +82,16 @@ defmodule Value do
 
   @spec divide(__MODULE__.t(), __MODULE__.t()) :: __MODULE__.t()
   def divide(
-        %Value{data: left_data, gradient: left_gradient} = left,
-        %Value{data: right_data, gradient: right_gradient} = right
+        %Value{data: left_data} = left,
+        %Value{data: right_data} = right
       ) do
-    result = %Value{
+    %Value{
       children: [left, right],
-      data: trunc(left_data / right_data),
+      data: left_data / right_data,
       operation: :/,
-      ref: make_ref()
+      ref: make_ref(),
+      gradient: 0.0
     }
-
-    backward = fn node ->
-      left = %Value{left | gradient: left_gradient + right_data * node.gradient}
-      right = %Value{right | gradient: right_gradient + left_data * node.gradient}
-
-      %Value{node | children: [left, right]}
-    end
-
-    %Value{result | backward: backward}
   end
 
   def divide(_, _) do
@@ -131,93 +99,130 @@ defmodule Value do
   end
 
   @spec tanh(__MODULE__.t()) :: __MODULE__.t()
-  def tanh(%Value{data: data, children: children}, gradient \\ 1) do
+  def tanh(%Value{data: data} = input) do
     t = (:math.exp(2 * data) - 1) / (:math.exp(2 * data) + 1)
 
-    result = %Value{
+    %Value{
       data: t,
-      gradient: gradient,
-      children: children,
+      children: [input],
       operation: :tanh,
-      ref: make_ref()
+      ref: make_ref(),
+      gradient: 0.0  # Initialize gradient to 0
     }
-
-    backward = fn node ->
-      children =
-        Enum.map(children, fn child ->
-          %Value{child | gradient: 1 - t ** 2}
-        end)
-
-      %Value{node | children: children}
-    end
-
-    %Value{result | backward: backward}
   end
 
-  def pow(%Value{data: data, gradient: gradient} = child, pow) do
-    t = data ** pow
+  def pow(%Value{data: data} = child, _pow) do
+    t = data ** 2  # Assume power of 2 for simplicity
 
-    result = %Value{
+    %Value{
       data: t,
-      gradient: gradient,
       children: [child],
       operation: :pow,
-      ref: make_ref()
+      ref: make_ref(),
+      gradient: 0.0
     }
+  end
 
-    backward = fn node ->
-      child = %Value{child | gradient: pow * data ** (pow - 1) * gradient}
+  defp build_topo(node, topo, visited) do
+    if MapSet.member?(visited, node.ref) do
+      {topo, visited}
+    else
+      visited = MapSet.put(visited, node.ref)
 
-      %Value{node | children: [child]}
+      # First, recursively visit all children
+      {topo, visited} =
+        Enum.reduce(node.children, {topo, visited}, fn child, {topo_acc, visited_acc} ->
+          build_topo(child, topo_acc, visited_acc)
+        end)
+
+      # Then add this node AFTER all its children
+      {[node | topo], visited}
     end
-
-    %Value{result | backward: backward}
   end
 
-  def backward(%{children: [_left, _right]} = root) do
-    root = Map.put(root, :gradient, 1.0)
-    %{children: [left, right], gradient: gradient} = root = root.backward.(root)
+  defp propagate_gradients(node, acc) do
+    # Get the current node's gradient from the accumulator
+    node_grad = Map.get(acc, node.ref, 0.0)
 
-    %{root | children: [backward(left, gradient), backward(right, gradient)]}
+    case node.operation do
+      :+ ->
+        # Both children get the same gradient
+        Enum.reduce(node.children, acc, fn child, acc ->
+          current_grad = Map.get(acc, child.ref, 0.0)
+          Map.put(acc, child.ref, current_grad + node_grad)
+        end)
+
+      :- ->
+        # Left child gets positive gradient, right gets negative
+        [left, right] = node.children
+        left_grad = Map.get(acc, left.ref, 0.0)
+        right_grad = Map.get(acc, right.ref, 0.0)
+
+        acc
+        |> Map.put(left.ref, left_grad + node_grad)
+        |> Map.put(right.ref, right_grad - node_grad)
+
+      :* ->
+        # Chain rule: gradient * other operand
+        [left, right] = node.children
+        left_grad = Map.get(acc, left.ref, 0.0)
+        right_grad = Map.get(acc, right.ref, 0.0)
+
+        acc
+        |> Map.put(left.ref, left_grad + right.data * node_grad)
+        |> Map.put(right.ref, right_grad + left.data * node_grad)
+
+      :/ ->
+        # Quotient rule
+        [left, right] = node.children
+        left_grad = Map.get(acc, left.ref, 0.0)
+        right_grad = Map.get(acc, right.ref, 0.0)
+
+        acc
+        |> Map.put(left.ref, left_grad + (1.0 / right.data) * node_grad)
+        |> Map.put(right.ref, right_grad - (left.data / (right.data * right.data)) * node_grad)
+
+      :tanh ->
+        # d/dx(tanh(x)) = 1 - tanh²(x)
+        [child] = node.children
+        child_grad = Map.get(acc, child.ref, 0.0)
+        tanh_grad = (1 - node.data * node.data) * node_grad
+
+        Map.put(acc, child.ref, child_grad + tanh_grad)
+
+      :pow ->
+        # d/dx(x^n) = n * x^(n-1)
+        [child] = node.children
+        child_grad = Map.get(acc, child.ref, 0.0)
+        # For power of 2: gradient = 2 * x * parent_gradient
+        pow_grad = 2 * child.data * node_grad
+
+        Map.put(acc, child.ref, child_grad + pow_grad)
+
+      _ ->
+        # No operation or unknown operation - don't propagate gradients
+        acc
+    end
   end
 
-  # def backward(%{children: [_node]} = root) do
-  #   root = Map.put(root, :gradient, 1.0)
-  #   IO.puts("<<<<<< 1")
-  #   %{children: [node], gradient: gradient} = root = root.backward.(root)
+  def map_gradients(%{} = loss) do
+    # Collect all nodes in topological order
+    topo = []
+    visited = MapSet.new()
 
-  #   %{root | children: [backward(node, gradient)]}
-  # end
+    {topo, _visited} = build_topo(loss, topo, visited)
 
-  def backward(%{backward: nil, gradient: node_gradient} = node, _gradient) do
-    %{node | gradient: node_gradient}
-  end
+    # Initialize gradient accumulator with loss gradient = 1.0
+    initial_acc = %{loss.ref => 1.0}
 
-  def backward(%{children: [_left, _right]} = root, gradient) do
-    %{children: [left, right]} = root = root.backward.(root)
-
-    %{root | children: [backward(left, gradient), backward(right, gradient)]}
-  end
-
-  def backward(%{children: [_node]} = root, gradient) do
-    %{children: [node]} = root = root.backward.(root)
-
-    %{root | children: [backward(node, gradient)]}
-  end
-
-  def sum([head | tail]) do
-    Enum.reduce(tail, head, fn value, acc -> add(acc, value) end)
-  end
-
-  def map_gradients(%{children: children} = loss) do
-    do_flatten(children, %{loss.ref => loss.gradient})
-  end
-
-  def do_flatten([] = _loss, acc), do: acc
-
-  def do_flatten(loss, acc) do
-    Enum.reduce(loss, acc, fn %{ref: ref, gradient: gradient, children: nodes}, acc ->
-      do_flatten(nodes, Map.put(acc, ref, gradient))
+    # Propagate gradients backward and return the gradient map
+    Enum.reduce(topo, initial_acc, fn node, acc ->
+      # Propagate gradients to children based on operation
+      propagate_gradients(node, acc)
     end)
+  end
+
+    def sum([head | tail]) do
+    Enum.reduce(tail, head, fn value, acc -> add(acc, value) end)
   end
 end
