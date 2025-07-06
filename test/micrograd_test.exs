@@ -10,16 +10,7 @@ defmodule MicrogradTest do
     c = Value.mult(a, b)  # c = 6
     loss = Value.pow(c, 2)  # loss = 36
 
-    IO.puts("=== SIMPLE GRADIENT TEST ===")
-    IO.puts("a.data: #{a.data}, b.data: #{b.data}, c.data: #{c.data}, loss.data: #{loss.data}")
-
     gradients = Value.map_gradients(loss)
-
-    IO.puts("Gradients computed:")
-    IO.puts("Gradient for a (ref #{inspect(a.ref)}): #{Map.get(gradients, a.ref, "NOT FOUND")}")
-    IO.puts("Gradient for b (ref #{inspect(b.ref)}): #{Map.get(gradients, b.ref, "NOT FOUND")}")
-    IO.puts("Gradient for c (ref #{inspect(c.ref)}): #{Map.get(gradients, c.ref, "NOT FOUND")}")
-    IO.puts("Gradient for loss (ref #{inspect(loss.ref)}): #{Map.get(gradients, loss.ref, "NOT FOUND")}")
 
     # Expected gradients:
     # d(loss)/d(c) = 2 * c = 2 * 6 = 12
@@ -66,23 +57,12 @@ defmodule MicrogradTest do
 
         if rem(i, 10) == 0 do
           IO.inspect("Iteration #{i} loss: #{loss.data}")
-          # Show some actual predictions
-          pred_values = Enum.map(predictions, &(&1.data))
-          IO.inspect("Predictions: #{inspect(pred_values)}")
-          IO.inspect("Targets:     #{inspect(ys)}")
 
-          if i == 0 do  # Only debug on first iteration
-            # Debug: Show some gradients
-            gradient_values = Map.values(gradients)
-            if length(gradient_values) > 0 do
-              non_zero_grads = Enum.filter(gradient_values, &(&1 != 0.0))
-              IO.inspect("Non-zero gradients: #{length(non_zero_grads)}/#{length(gradient_values)}")
-              if length(non_zero_grads) > 0 do
-                IO.inspect("Sample non-zero gradients: #{inspect(Enum.take(non_zero_grads, 3))}")
-              end
-            else
-              IO.inspect("No gradients computed!")
-            end
+          if i == 0 do
+            # Show some actual predictions on first iteration
+            pred_values = Enum.map(predictions, &(&1.data))
+            IO.inspect("Predictions: #{inspect(pred_values)}")
+            IO.inspect("Targets:     #{inspect(ys)}")
           end
         end
 

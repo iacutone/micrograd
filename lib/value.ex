@@ -123,20 +123,58 @@ defmodule Value do
     }
   end
 
-  defp build_topo(node, topo, visited) do
-    if MapSet.member?(visited, node.ref) do
-      {topo, visited}
-    else
-      visited = MapSet.put(visited, node.ref)
+  defp build_digraph_and_topsort(root) do
+    # Create a new directed graph
+    graph = :digraph.new()
 
-      # First, recursively visit all children
-      {topo, visited} =
-        Enum.reduce(node.children, {topo, visited}, fn child, {topo_acc, visited_acc} ->
-          build_topo(child, topo_acc, visited_acc)
+    # Collect all nodes and build the digraph
+    visited = MapSet.new()
+    {all_nodes, _visited} = collect_nodes(root, [], visited)
+
+    # Add all nodes as vertices
+    Enum.each(all_nodes, fn node ->
+      :digraph.add_vertex(graph, node.ref, node)
+    end)
+
+    # Add edges (from parent to children)
+    Enum.each(all_nodes, fn node ->
+      Enum.each(node.children, fn child ->
+        :digraph.add_edge(graph, node.ref, child.ref)
+      end)
+    end)
+
+    # Get topological sort
+    case :digraph_utils.topsort(graph) do
+      false ->
+        # Graph has cycles, should not happen in our computation graph
+        :digraph.delete(graph)
+        raise "Cycle detected in computation graph"
+
+      topo_refs ->
+        # Convert references back to nodes
+        topo_nodes = Enum.map(topo_refs, fn ref ->
+          {^ref, node} = :digraph.vertex(graph, ref)
+          node
         end)
 
-      # Then add this node AFTER all its children
-      {[node | topo], visited}
+        # Clean up the digraph
+        :digraph.delete(graph)
+
+        topo_nodes
+    end
+  end
+
+  defp collect_nodes(node, acc, visited) do
+    if MapSet.member?(visited, node.ref) do
+      {acc, visited}
+    else
+      visited = MapSet.put(visited, node.ref)
+      acc = [node | acc]
+
+      # Recursively collect children
+      Enum.reduce(node.children, {acc, visited}, fn child, {acc_inner, visited_inner} ->
+        collect_nodes(child, acc_inner, visited_inner)
+      end)
     end
   end
 
@@ -206,17 +244,14 @@ defmodule Value do
   end
 
   def map_gradients(%{} = loss) do
-    # Collect all nodes in topological order
-    topo = []
-    visited = MapSet.new()
-
-    {topo, _visited} = build_topo(loss, topo, visited)
+    # Build digraph and get topological sort using Erlang's digraph library
+    topo_nodes = build_digraph_and_topsort(loss)
 
     # Initialize gradient accumulator with loss gradient = 1.0
     initial_acc = %{loss.ref => 1.0}
 
-    # Propagate gradients backward and return the gradient map
-    Enum.reduce(topo, initial_acc, fn node, acc ->
+    # Propagate gradients backward using the topologically sorted nodes
+    Enum.reduce(topo_nodes, initial_acc, fn node, acc ->
       # Propagate gradients to children based on operation
       propagate_gradients(node, acc)
     end)
