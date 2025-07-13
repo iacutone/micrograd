@@ -10,7 +10,7 @@ defmodule MicrogradTest do
     c = Value.mult(a, b)  # c = 6
     loss = Value.pow(c, 2)  # loss = 36
 
-    gradients = Value.map_gradients(loss)
+    {_updated_loss, gradients} = Value.map_gradients_with_map(loss)
 
     # Expected gradients:
     # d(loss)/d(c) = 2 * c = 2 * 6 = 12
@@ -37,11 +37,11 @@ defmodule MicrogradTest do
     mlp = MLP.build(%{input_size: 3, layer_sizes: [4, 4, 1]})
 
     mlp =
-      Enum.reduce(0..99, mlp, fn i, mlp ->
+      Enum.reduce(0..9, mlp, fn i, mlp ->
         # forward pass
         predictions =
           Enum.map(xs, fn x ->
-            MLP.call(mlp, x)
+            MLP.call(mlp, x) |> List.last()  # Get the final layer output
           end)
 
         loss =
@@ -53,9 +53,9 @@ defmodule MicrogradTest do
           |> Value.sum()
 
         # backward pass and get gradients
-        gradients = Value.map_gradients(loss)
+        {_updated_loss, gradients} = Value.map_gradients_with_map(loss)
 
-        if rem(i, 10) == 0 do
+        if rem(i, 5) == 0 do
           IO.inspect("Iteration #{i} loss: #{loss.data}")
 
           if i == 0 do
@@ -71,9 +71,9 @@ defmodule MicrogradTest do
       end)
 
     # Test predictions after training - even more relaxed tolerance
-    assert_in_delta MLP.call(mlp, [2.0, 3.0, -1.0]).data, 1.0, 0.5
-    assert_in_delta MLP.call(mlp, [3.0, -1.0, 0.5]).data, -1.0, 0.5
-    assert_in_delta MLP.call(mlp, [0.5, 1.0, 1.0]).data, -1.0, 0.5
-    assert_in_delta MLP.call(mlp, [1.0, 1.0, -1.0]).data, 1.0, 0.5
+    assert_in_delta (MLP.call(mlp, [2.0, 3.0, -1.0]) |> List.last()).data, 1.0, 0.5
+    assert_in_delta (MLP.call(mlp, [3.0, -1.0, 0.5]) |> List.last()).data, -1.0, 0.5
+    assert_in_delta (MLP.call(mlp, [0.5, 1.0, 1.0]) |> List.last()).data, -1.0, 0.5
+    assert_in_delta (MLP.call(mlp, [1.0, 1.0, -1.0]) |> List.last()).data, 1.0, 0.5
   end
 end

@@ -48,16 +48,16 @@ defmodule Neuron do
     Value.tanh(linear_output)
   end
 
-  def update(%__MODULE__{weights: weights, bias: bias} = neuron, loss, learning_rate) do
+  def update(%__MODULE__{weights: weights, bias: bias} = neuron, gradients, learning_rate) do
     %{data: bias_data} = bias
 
     weights =
       Enum.map(weights, fn %Value{data: data} = weight ->
-        gradient = Map.get(loss, weight.ref, 0.0)  # Default to 0 if gradient not found
+        gradient = Map.get(gradients, weight.ref, 0.0)  # Get gradient from map
         Map.put(weight, :data, data - learning_rate * gradient)  # Proper gradient descent
       end)
 
-    bias_gradient = Map.get(loss, bias.ref, 0.0)  # Default to 0 if gradient not found
+    bias_gradient = Map.get(gradients, bias.ref, 0.0)  # Get gradient from map
     bias = Map.put(bias, :data, bias_data - learning_rate * bias_gradient)  # Proper gradient descent
 
     %{neuron | weights: weights, bias: bias}

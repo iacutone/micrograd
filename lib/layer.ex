@@ -39,10 +39,10 @@ defmodule Layer do
     end
   end
 
-  def update(%{neurons: neurons} = layer, loss, learning_rate) do
+  def update(%{neurons: neurons} = layer, gradients, learning_rate) do
     neurons =
       Enum.map(neurons, fn neuron ->
-        Neuron.update(neuron, loss, learning_rate)
+        Neuron.update(neuron, gradients, learning_rate)
       end)
 
     %{layer | neurons: neurons}

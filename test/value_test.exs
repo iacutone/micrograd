@@ -69,7 +69,7 @@ defmodule ValueTest do
       result = Map.put(result, :gradient, 1.0)
       result = result.backward.(result)
 
-      assert %{children: [%{gradient: 1.0}, %{gradient: 1.0}]} = result
+      assert %{children: [%{gradient: 1.0}, %{gradient: -1.0}]} = result
     end
   end
 
@@ -141,7 +141,7 @@ defmodule ValueTest do
       result = Map.put(result, :gradient, 2)
       result = result.backward.(result)
 
-      assert %{children: [%{gradient: 4.0}, %{gradient: 2.0}]} = result
+      assert %{children: [%{gradient: 1.0}, %{gradient: -0.5}]} = result
     end
   end
 
@@ -165,16 +165,16 @@ defmodule ValueTest do
       b = Value.build(1)
       c = Value.add(a, b)
       result = Value.tanh(c)
+      result = Map.put(result, :gradient, 1.0)
       result = result.backward.(result)
 
-      assert %{children: [%{gradient: 0.07065082485316443}, %{gradient: 0.07065082485316443}]} =
-               result
+      assert %{children: [%{gradient: 0.07065082485316443}]} = result
     end
   end
 
   describe "pow/2" do
     setup do
-      a = %Value{data: 2, gradient: 12.0, ref: make_ref()}
+      a = %Value{data: 2, gradient: 0.0, ref: make_ref()}
       result = Value.pow(a, 2)
 
       %{a: a, result: result}
@@ -193,7 +193,8 @@ defmodule ValueTest do
     end
 
     test "sets gradient value correctly", %{result: result} do
-      assert %{gradient: 12.0} = result
+      assert %{gradient: 0.0} = result
+      result = Map.put(result, :gradient, 12.0)
       result = result.backward.(result)
       assert %{data: 4, gradient: 12.0, children: [%{data: 2, gradient: 48.0}]} = result
     end

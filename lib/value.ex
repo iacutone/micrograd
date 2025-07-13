@@ -36,7 +36,17 @@ defmodule Value do
       data: left_data + right_data,
       operation: :+,
       ref: make_ref(),
-      gradient: 0.0
+      gradient: 0.0,
+      backward: fn node ->
+        # Both children get the same gradient as the parent
+        left_grad = node.gradient
+        right_grad = node.gradient
+
+        updated_left = %{left | gradient: left.gradient + left_grad}
+        updated_right = %{right | gradient: right.gradient + right_grad}
+
+        %{node | children: [updated_left, updated_right]}
+      end
     }
   end
 
@@ -54,7 +64,17 @@ defmodule Value do
       data: left_data - right_data,
       operation: :-,
       ref: make_ref(),
-      gradient: 0.0
+      gradient: 0.0,
+      backward: fn node ->
+        # Left child gets positive gradient, right gets negative
+        left_grad = node.gradient
+        right_grad = -node.gradient
+
+        updated_left = %{left | gradient: left.gradient + left_grad}
+        updated_right = %{right | gradient: right.gradient + right_grad}
+
+        %{node | children: [updated_left, updated_right]}
+      end
     }
   end
 
@@ -72,7 +92,17 @@ defmodule Value do
       data: left_data * right_data,
       operation: :*,
       ref: make_ref(),
-      gradient: 0.0
+      gradient: 0.0,
+      backward: fn node ->
+        # Chain rule: gradient * other operand
+        left_grad = right_data * node.gradient
+        right_grad = left_data * node.gradient
+
+        updated_left = %{left | gradient: left.gradient + left_grad}
+        updated_right = %{right | gradient: right.gradient + right_grad}
+
+        %{node | children: [updated_left, updated_right]}
+      end
     }
   end
 
@@ -85,12 +115,24 @@ defmodule Value do
         %Value{data: left_data} = left,
         %Value{data: right_data} = right
       ) do
+    result_data = left_data / right_data
+
     %Value{
       children: [left, right],
-      data: left_data / right_data,
+      data: if(is_integer(left_data) and is_integer(right_data) and rem(left_data, right_data) == 0, do: trunc(result_data), else: result_data),
       operation: :/,
       ref: make_ref(),
-      gradient: 0.0
+      gradient: 0.0,
+      backward: fn node ->
+        # Quotient rule
+        left_grad = (1.0 / right_data) * node.gradient
+        right_grad = -(left_data / (right_data * right_data)) * node.gradient
+
+        updated_left = %{left | gradient: left.gradient + left_grad}
+        updated_right = %{right | gradient: right.gradient + right_grad}
+
+        %{node | children: [updated_left, updated_right]}
+      end
     }
   end
 
@@ -107,7 +149,14 @@ defmodule Value do
       children: [input],
       operation: :tanh,
       ref: make_ref(),
-      gradient: 0.0  # Initialize gradient to 0
+      gradient: 0.0,
+      backward: fn node ->
+        # d/dx(tanh(x)) = 1 - tanh²(x)
+        tanh_grad = (1 - node.data * node.data) * node.gradient
+        updated_input = %{input | gradient: input.gradient + tanh_grad}
+
+        %{node | children: [updated_input]}
+      end
     }
   end
 
@@ -119,7 +168,15 @@ defmodule Value do
       children: [child],
       operation: :pow,
       ref: make_ref(),
-      gradient: 0.0
+      gradient: 0.0,
+      backward: fn node ->
+        # d/dx(x^n) = n * x^(n-1)
+        # For power of 2: gradient = 2 * x * parent_gradient
+        pow_grad = 2 * child.data * node.gradient
+        updated_child = %{child | gradient: child.gradient + pow_grad}
+
+        %{node | children: [updated_child]}
+      end
     }
   end
 
@@ -248,16 +305,60 @@ defmodule Value do
     topo_nodes = build_digraph_and_topsort(loss)
 
     # Initialize gradient accumulator with loss gradient = 1.0
-    initial_acc = %{loss.ref => 1.0}
+    gradients = %{loss.ref => 1.0}
 
-    # Propagate gradients backward using the topologically sorted nodes
-    Enum.reduce(topo_nodes, initial_acc, fn node, acc ->
-      # Propagate gradients to children based on operation
+    # Propagate gradients backward using the operation-based approach
+    # The digraph topsort already gives us the correct order for gradient propagation
+    final_gradients = topo_nodes
+    |> Enum.reduce(gradients, fn node, acc ->
+      # Use the operation-based gradient propagation
       propagate_gradients(node, acc)
     end)
+
+    # Now update all nodes with their calculated gradients
+    update_nodes_with_gradients(loss, final_gradients)
   end
 
-    def sum([head | tail]) do
+  def map_gradients_with_map(%{} = loss) do
+    # Build digraph and get topological sort using Erlang's digraph library
+    topo_nodes = build_digraph_and_topsort(loss)
+
+    # Initialize gradient accumulator with loss gradient = 1.0
+    gradients = %{loss.ref => 1.0}
+
+    # Propagate gradients backward using the operation-based approach
+    # The digraph topsort already gives us the correct order for gradient propagation
+    final_gradients = topo_nodes
+    |> Enum.reduce(gradients, fn node, acc ->
+      # Use the operation-based gradient propagation
+      propagate_gradients(node, acc)
+    end)
+
+    # Return both the updated graph and the gradient map
+    {update_nodes_with_gradients(loss, final_gradients), final_gradients}
+  end
+
+  defp update_nodes_with_gradients(node, gradients) do
+    # Update current node's gradient
+    updated_node = %{node | gradient: Map.get(gradients, node.ref, 0.0)}
+
+    # Recursively update children
+    updated_children = Enum.map(node.children, fn child ->
+      update_nodes_with_gradients(child, gradients)
+    end)
+
+    # Return node with updated gradient and children
+    %{updated_node | children: updated_children}
+  end
+
+  @spec backward(__MODULE__.t()) :: __MODULE__.t()
+  def backward(%Value{} = node) do
+    # Set gradient to 1.0 for the root node and propagate gradients
+    root_node = %{node | gradient: 1.0}
+    map_gradients(root_node)
+  end
+
+  def sum([head | tail]) do
     Enum.reduce(tail, head, fn value, acc -> add(acc, value) end)
   end
 end
